@@ -206,19 +206,34 @@ def fit_mech_richards(t, N):
     Returns:
         Dict with 'params' and 'model_type', or None if fitting fails.
     """
-    return _fit_model_generic(
-        t,
-        N,
-        model_func=mech_richards_model,
-        param_names=["mu", "K", "N0", "beta", "y0"],
-        p0_func=lambda K, y0, t, dy: [0.5, K - y0, 0.001, 1.0, y0],
-        bounds_func=lambda K, y0, t: (
-            [0.0001, 0.001, 1e-6, 0.01, 0],
-            [10, np.inf, 10, 100, y0 * 2],
-        ),
-        model_type="mech_richards",
-        log_space=True,
-    )
+    # Multistart over β: a single seed often lands in the wrong basin for true
+    # β at the extremes of the (0.1, 10) range. Three log-spaced seeds at ~3× cost.
+    best, best_ssr = None, np.inf
+    for beta_init in (0.1, 1.0, 10.0):
+        try:
+            result = _fit_model_generic(
+                t,
+                N,
+                model_func=mech_richards_model,
+                param_names=["mu", "K", "N0", "beta", "y0"],
+                p0_func=lambda K, y0, t, dy, b=beta_init: [0.5, K - y0, 0.001, b, y0],
+                bounds_func=lambda K, y0, t: (
+                    [0.0001, 0.001, 1e-6, 0.01, 0],
+                    [10, np.inf, 10, 100, y0 * 2],
+                ),
+                model_type="mech_richards",
+                log_space=True,
+            )
+        except Exception:
+            continue
+        if result is None:
+            continue
+        p = result["params"]
+        pred = mech_richards_model(t, p["mu"], p["K"], p["N0"], p["beta"], p["y0"])
+        ssr = float(np.sum((np.log(np.maximum(pred, 1e-8)) - np.log(np.maximum(N, 1e-8))) ** 2))
+        if ssr < best_ssr:
+            best_ssr, best = ssr, result
+    return best
 
 
 def fit_mech_baranyi(t, N):
