@@ -71,7 +71,9 @@ def _estimate_lag_time(t, dN, threshold_frac=0.1):
     return t[lag_idx[0]] if len(lag_idx) > 0 else t[0]
 
 
-def _fit_model_generic(t, N, model_func, param_names, p0_func, bounds_func, model_type):
+def _fit_model_generic(
+    t, N, model_func, param_names, p0_func, bounds_func, model_type, log_space=False
+):
     """
     Generic wrapper for fitting parametric growth models.
 
@@ -103,7 +105,14 @@ def _fit_model_generic(t, N, model_func, param_names, p0_func, bounds_func, mode
     bounds = bounds_func(K_init, N0_init, t)
 
     # Fit the model
-    params, _ = curve_fit(model_func, t, N, p0=p0, bounds=bounds, maxfev=20000)
+    if log_space:
+        N_pos = np.maximum(N, 1e-8)
+        log_model = lambda tt, *p: np.log(np.maximum(model_func(tt, *p), 1e-8))
+        params, _ = curve_fit(
+            log_model, t, np.log(N_pos), p0=p0, bounds=bounds, maxfev=20000
+        )
+    else:
+        params, _ = curve_fit(model_func, t, N, p0=p0, bounds=bounds, maxfev=20000)
 
     # Return structured result
     return {
@@ -143,6 +152,7 @@ def fit_mech_logistic(t, N):
             [10, np.inf, 10, y0 * 2],
         ),
         model_type="mech_logistic",
+        log_space=True,
     )
 
 
@@ -178,6 +188,7 @@ def fit_mech_gompertz(t, N):
             [2, np.inf, 1, y0 * 2],
         ),
         model_type="mech_gompertz",
+        log_space=True,
     )
 
 
@@ -206,6 +217,7 @@ def fit_mech_richards(t, N):
             [10, np.inf, 10, 100, y0 * 2],
         ),
         model_type="mech_richards",
+        log_space=True,
     )
 
 
@@ -245,6 +257,7 @@ def fit_mech_baranyi(t, N):
         p0_func=p0_baranyi,
         bounds_func=bounds_baranyi,
         model_type="mech_baranyi",
+        log_space=True,
     )
 
 
@@ -348,17 +361,16 @@ def fit_phenom_gompertz_modified(t, N):
 
     # Estimate initial parameters
     N0 = float(np.min(N))
-    N_max = float(np.max(N))
-    A_init = np.log(N_max / N0)
+    A_init = max(float(np.log(N[len(t) // 3] / N0)), 0.1)
     mu_max_init = 0.5
-    lam_init = _estimate_lag_time(t, np.gradient(N, t))
-    alpha_init = -0.01  # Small negative decay rate
-    t_shift_init = t.max() * 0.5  # Midpoint
+    lam_init = t.max() * 0.1
+    alpha_init = 0.05
+    t_shift_init = t.max() * 0.8
 
     p0 = [A_init, mu_max_init, lam_init, alpha_init, t_shift_init, N0]
     bounds = (
-        [0.01, 0.0001, 0, -1, 0, N0 * 0.1],
-        [20, 10, t.max(), 1, t.max(), N0 * 5],
+        [0.01, 0.0001, 0, -1, 0, 1e-4],
+        [20, 10, t.max(), 1, t.max(), 1.0],
     )
 
     # Fit the model
