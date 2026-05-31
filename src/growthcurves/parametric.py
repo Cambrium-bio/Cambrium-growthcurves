@@ -105,7 +105,10 @@ def _fit_model_generic(
     # Fit the model
     if log_space:
         N_pos = np.maximum(N, 1e-8)
-        log_model = lambda tt, *p: np.log(np.maximum(model_func(tt, *p), 1e-8))
+
+        def log_model(tt, *p):
+            return np.log(np.maximum(model_func(tt, *p), 1e-8))
+
         params, _ = curve_fit(
             log_model, t, np.log(N_pos), p0=p0, bounds=bounds, maxfev=20000
         )
@@ -234,7 +237,8 @@ def fit_mech_richards(t, N):
             continue
         p = result["params"]
         pred = mech_richards_model(t, p["mu"], p["K"], p["N0"], p["beta"])
-        ssr = float(np.sum((np.log(np.maximum(pred, 1e-8)) - np.log(np.maximum(N, 1e-8))) ** 2))
+        log_resid = np.log(np.maximum(pred, 1e-8)) - np.log(np.maximum(N, 1e-8))
+        ssr = float(np.sum(log_resid**2))
         if ssr < best_ssr:
             best_ssr, best = ssr, result
     return best
