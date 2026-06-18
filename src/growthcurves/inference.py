@@ -1580,6 +1580,7 @@ def bad_fit_stats():
 # No-Growth Detection
 # -----------------------------------------------------------------------------
 
+
 # ? maybe update that all checks are always performed
 def detect_no_growth(
     t,
